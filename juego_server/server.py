@@ -9,7 +9,7 @@ import os
 # ==========================
 # CONFIG
 # ==========================
-PORT = int(os.environ.get("PORT", 8765"))
+PORT = int(os.environ.get("PORT", 8765))
 
 clientes = {}
 salas = {}
