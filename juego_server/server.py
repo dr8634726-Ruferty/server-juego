@@ -3,167 +3,94 @@ import websockets
 import json
 import random
 import string
-import sqlite3
 import os
+import time
 
-# ==========================
-# CONFIG
-# ==========================
 PORT = int(os.environ.get("PORT", 8765))
 
 clientes = {}
 salas = {}
 
-DB = "juego.db"
+ARCHIVO_SALAS = "salas.json"
+ARCHIVO_JUGADORES = "jugadores.json"
+
+jugadores = {}
 
 
-# ==========================
-# SQLITE
-# ==========================
-def iniciar_db():
-
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS salas (
-        codigo TEXT PRIMARY KEY
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS jugadores (
-        id TEXT PRIMARY KEY,
-        nombre TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS posiciones (
-        jugador_id TEXT,
-        sala TEXT,
-        x INTEGER,
-        y INTEGER,
-        PRIMARY KEY (jugador_id, sala)
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+ultimo_guardado = 0
+INTERVALO_GUARDADO = 5  
 
 
-# ==========================
-# SALAS
-# ==========================
+
 def cargar_salas():
     global salas
 
-    salas = {}
+    if os.path.exists(ARCHIVO_SALAS):
+        try:
+            with open(ARCHIVO_SALAS, "r") as f:
+                data = json.load(f)
 
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
+                salas = {}
 
-    filas = cur.execute("SELECT codigo FROM salas").fetchall()
+                for codigo in data:
+                    salas[codigo] = []
 
-    for row in filas:
-        salas[row[0]] = []
+                print("Salas cargadas:", list(salas.keys()))
 
-    conn.close()
-
-    print("Salas cargadas:", list(salas.keys()))
-
-
-def guardar_sala(codigo):
-
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    cur.execute(
-        "INSERT OR IGNORE INTO salas (codigo) VALUES (?)",
-        (codigo,)
-    )
-
-    conn.commit()
-    conn.close()
+        except Exception as e:
+            print("Error cargando salas:", e)
+            salas = {}
 
 
-# ==========================
-# JUGADORES
-# ==========================
-def guardar_jugador(player_id, nombre):
 
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
+def cargar_jugadores():
+    global jugadores
 
-    cur.execute("""
-    INSERT OR REPLACE INTO jugadores (id,nombre)
-    VALUES (?,?)
-    """, (player_id, nombre))
-
-    conn.commit()
-    conn.close()
+    if os.path.exists(ARCHIVO_JUGADORES):
+        try:
+            with open(ARCHIVO_JUGADORES, "r") as f:
+                jugadores = json.load(f)
+                print("Jugadores cargados:", len(jugadores))
+        except:
+            jugadores = {}
 
 
-def guardar_posicion(player_id, sala, x, y):
 
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
+def guardar_salas():
+    try:
+        lista = list(salas.keys())
 
-    cur.execute("""
-    INSERT OR REPLACE INTO posiciones (jugador_id,sala,x,y)
-    VALUES (?,?,?,?)
-    """, (player_id, sala, x, y))
+        with open(ARCHIVO_SALAS, "w") as f:
+            json.dump(lista, f, indent=4)
 
-    conn.commit()
-    conn.close()
+    except Exception as e:
+        print("Error guardando salas:", e)
 
 
-def cargar_posicion(player_id, sala):
 
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
+def guardar_jugadores():
+    global ultimo_guardado
 
-    fila = cur.execute("""
-    SELECT x,y FROM posiciones
-    WHERE jugador_id=? AND sala=?
-    """, (player_id, sala)).fetchone()
+    ahora = time.time()
 
-    conn.close()
+    if ahora - ultimo_guardado < INTERVALO_GUARDADO:
+        return
 
-    if fila:
-        return fila[0], fila[1]
+    ultimo_guardado = ahora
 
-    return 100, 100
-
-
-def cargar_nombre(player_id):
-
-    conn = sqlite3.connect(DB)
-    cur = conn.cursor()
-
-    fila = cur.execute("""
-    SELECT nombre FROM jugadores
-    WHERE id=?
-    """, (player_id,)).fetchone()
-
-    conn.close()
-
-    if fila:
-        return fila[0]
-
-    return "Jugador"
+    try:
+        with open(ARCHIVO_JUGADORES, "w") as f:
+            json.dump(jugadores, f, indent=4)
+    except Exception as e:
+        print("Error guardando jugadores:", e)
 
 
-# ==========================
-# CODIGO SALA
-# ==========================
+
 def generar_codigo():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
-# ==========================
-# ENVIAR A SALA
-# ==========================
+
 async def enviar_a_sala(codigo, data):
 
     if codigo not in salas:
@@ -179,9 +106,7 @@ async def enviar_a_sala(codigo, data):
                 salas[codigo].remove(ws)
 
 
-# ==========================
-# LISTA JUGADORES
-# ==========================
+
 async def enviar_lista_jugadores(codigo):
 
     if codigo not in salas:
@@ -190,16 +115,14 @@ async def enviar_lista_jugadores(codigo):
     lista = []
 
     for ws in salas[codigo]:
-
         if ws in clientes:
-
             c = clientes[ws]
 
             lista.append({
                 "id": c["id"],
                 "nombre": c["nombre"],
-                "x": c["x"],
-                "y": c["y"],
+                "x": c.get("x", 0),
+                "y": c.get("y", 0),
                 "progreso": c.get("progreso", 0),
                 "nivel": c.get("nivel", 0),
                 "flip": c.get("flip", False)
@@ -211,9 +134,7 @@ async def enviar_lista_jugadores(codigo):
     })
 
 
-# ==========================
-# CLIENTE
-# ==========================
+
 async def manejar(ws):
 
     print("Cliente conectado")
@@ -225,26 +146,36 @@ async def manejar(ws):
             try:
                 data = json.loads(mensaje)
             except:
+                print("JSON inválido")
                 continue
 
             tipo = data.get("tipo", "")
             player_id = data.get("id")
 
-            # ==================
-            # CREAR SALA
-            # ==================
+            if not player_id and tipo not in ["listar_salas", "listar_jugadores"]:
+                continue
+
+
             if tipo == "crear_sala":
 
                 codigo = generar_codigo()
-
                 salas[codigo] = [ws]
-                guardar_sala(codigo)
 
-                nombre = data.get("nombre", "Jugador")
+                if player_id in jugadores:
+                    jugador_data = jugadores[player_id]
+                    nombre = jugador_data.get("nombre", "Jugador")
 
-                guardar_jugador(player_id, nombre)
-
-                x, y = cargar_posicion(player_id, codigo)
+                    if codigo in jugador_data.get("salas", {}):
+                        pos = jugador_data["salas"][codigo]
+                        x = pos.get("x", 100)
+                        y = pos.get("y", 100)
+                    else:
+                        x = 100
+                        y = 100
+                else:
+                    x = 100
+                    y = 100
+                    nombre = data.get("nombre", "Jugador")
 
                 clientes[ws] = {
                     "sala": codigo,
@@ -257,22 +188,23 @@ async def manejar(ws):
                     "flip": False
                 }
 
+                guardar_salas()
+
                 await ws.send(json.dumps({
                     "tipo": "sala_creada",
                     "codigo": codigo
                 }))
 
+                print("Sala creada:", codigo)
+
                 await enviar_lista_jugadores(codigo)
 
-            # ==================
-            # UNIRSE
-            # ==================
+
             elif tipo == "unirse_sala":
 
                 codigo = data.get("codigo", "")
 
                 if codigo not in salas:
-
                     await ws.send(json.dumps({
                         "tipo": "error",
                         "mensaje": "Sala no existe"
@@ -282,14 +214,21 @@ async def manejar(ws):
                 if ws not in salas[codigo]:
                     salas[codigo].append(ws)
 
-                nombre = cargar_nombre(player_id)
+                if player_id in jugadores:
+                    jugador_data = jugadores[player_id]
+                    nombre = jugador_data.get("nombre", "Jugador")
 
-                if nombre == "Jugador":
+                    if codigo in jugador_data.get("salas", {}):
+                        pos = jugador_data["salas"][codigo]
+                        x = pos.get("x", 100)
+                        y = pos.get("y", 100)
+                    else:
+                        x = 100
+                        y = 100
+                else:
+                    x = 100
+                    y = 100
                     nombre = data.get("nombre", "Jugador")
-
-                guardar_jugador(player_id, nombre)
-
-                x, y = cargar_posicion(player_id, codigo)
 
                 clientes[ws] = {
                     "sala": codigo,
@@ -307,11 +246,11 @@ async def manejar(ws):
                     "codigo": codigo
                 }))
 
+                print("Jugador unido a", codigo)
+
                 await enviar_lista_jugadores(codigo)
 
-            # ==================
-            # LISTAR SALAS
-            # ==================
+
             elif tipo == "listar_salas":
 
                 await ws.send(json.dumps({
@@ -319,34 +258,52 @@ async def manejar(ws):
                     "salas": list(salas.keys())
                 }))
 
-            # ==================
-            # LISTAR JUGADORES
-            # ==================
+
             elif tipo == "listar_jugadores":
 
                 codigo = data.get("codigo", "")
 
-                await enviar_lista_jugadores(codigo)
+                if codigo in salas:
+                    await enviar_lista_jugadores(codigo)
 
-            # ==================
-            # MOVIMIENTO
-            # ==================
             elif tipo == "movimiento":
 
                 if ws not in clientes:
                     continue
 
+                codigo = clientes[ws]["sala"]
                 c = clientes[ws]
-                codigo = c["sala"]
 
-                c["x"] = data.get("x", c["x"])
-                c["y"] = data.get("y", c["y"])
-                c["progreso"] = data.get("progreso", 0)
-                c["nivel"] = data.get("nivel", 0)
-                c["flip"] = data.get("flip", False)
+                
+                if "x" in data:
+                    c["x"] = data["x"]
 
-                guardar_jugador(player_id, c["nombre"])
-                guardar_posicion(player_id, codigo, c["x"], c["y"])
+                if "y" in data:
+                    c["y"] = data["y"]
+
+                if "progreso" in data:
+                    c["progreso"] = data["progreso"]
+
+                if "nivel" in data:
+                    c["nivel"] = data["nivel"]
+
+                if "flip" in data:
+                    c["flip"] = data["flip"]
+
+                if player_id not in jugadores:
+                    jugadores[player_id] = {
+                        "nombre": c["nombre"],
+                        "salas": {}
+                    }
+
+                jugadores[player_id].setdefault("salas", {})
+
+                jugadores[player_id]["salas"][codigo] = {
+                    "x": c["x"],
+                    "y": c["y"]
+                }
+
+                guardar_jugadores()
 
                 data["nombre"] = c["nombre"]
 
@@ -354,17 +311,19 @@ async def manejar(ws):
                 await enviar_lista_jugadores(codigo)
 
     except Exception as e:
-        print("Desconectado:", e)
+        print("Cliente desconectado:", e)
 
     finally:
 
         if ws in clientes:
 
             codigo = clientes[ws]["sala"]
-            jugador_id = clientes[ws]["id"]
+            jugador_id = clientes[ws].get("id")
 
-            if codigo in salas and ws in salas[codigo]:
-                salas[codigo].remove(ws)
+            if codigo in salas:
+
+                if ws in salas[codigo]:
+                    salas[codigo].remove(ws)
 
                 await enviar_a_sala(codigo, {
                     "tipo": "jugador_salio",
@@ -373,20 +332,38 @@ async def manejar(ws):
 
                 await enviar_lista_jugadores(codigo)
 
+                # eliminar sala vacía
+                #if len(salas[codigo]) == 0:
+                    #del salas[codigo]
+                    #print("Sala eliminada:", codigo)
+
             del clientes[ws]
 
+            guardar_salas()
+            guardar_jugadores()
 
-# ==========================
-# MAIN
-# ==========================
+
+async def responder_http(path, request_headers):
+    body = b"Servidor online"
+    return (
+        200,
+        [("Content-Type", "text/plain")],
+        body
+    )
+
 async def main():
 
-    iniciar_db()
     cargar_salas()
+    cargar_jugadores()
 
     print("Servidor iniciado en puerto", PORT)
 
-    async with websockets.serve(manejar, "0.0.0.0", PORT):
+    async with websockets.serve(
+        manejar,
+        "0.0.0.0",
+        PORT,
+        process_request=responder_http
+    ):
         await asyncio.Future()
 
 
