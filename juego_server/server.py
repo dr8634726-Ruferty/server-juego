@@ -344,10 +344,21 @@ async def manejar(ws):
 
 
 async def responder_http(path, request_headers):
+
+    
+    upgrade = request_headers.get("Upgrade", "").lower()
+
+    if upgrade == "websocket":
+        return None
+
     body = b"Servidor online"
+
     return (
         200,
-        [("Content-Type", "text/plain")],
+        [
+            ("Content-Type", "text/plain"),
+            ("Content-Length", str(len(body)))
+        ],
         body
     )
 
