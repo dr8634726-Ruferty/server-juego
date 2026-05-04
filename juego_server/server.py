@@ -334,7 +334,7 @@ async def manejar(ws):
 
                 vaca_id = data.get("id")
 
-                vacas_por_sala[codigo][vaca_id] = {
+                vaca = {
                     "x": data.get("x", 100),
                     "y": data.get("y", 100),
                     "dir_x": random.uniform(-1, 1),
@@ -342,7 +342,18 @@ async def manejar(ws):
                     "tiempo": random.uniform(1, 3)
                 }
 
+                vacas_por_sala[codigo][vaca_id] = vaca
+
                 print("🐄 Vaca creada:", vaca_id, "en sala", codigo)
+
+                # 🔥 ENVIAR INMEDIATAMENTE
+                await enviar_a_sala(codigo, {
+                    "tipo": "npc_movimiento",
+                    "id": vaca_id,
+                    "x": vaca["x"],
+                    "y": vaca["y"],
+                    "flip": False
+                })
 
             elif tipo == "movimiento":
 
