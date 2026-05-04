@@ -10,6 +10,7 @@ PORT = int(os.environ.get("PORT", 8765))
 
 clientes = {}
 salas = {}
+vacas_por_sala = {}
 
 ARCHIVO_SALAS = "salas.json"
 ARCHIVO_JUGADORES = "jugadores.json"
@@ -91,6 +92,60 @@ def generar_codigo():
 
 
 
+def crear_vacas_para_sala(codigo):
+
+    vacas_por_sala[codigo] = {}
+
+    for i in range(3):  # 👈 cantidad de vacas
+        vaca_id = f"vaca_{i}"
+
+        vacas_por_sala[codigo][vaca_id] = {
+            "x": random.randint(100, 400),
+            "y": random.randint(100, 400),
+            "dir_x": random.uniform(-1, 1),
+            "dir_y": random.uniform(-1, 1),
+            "tiempo": random.uniform(1, 3)
+        }
+
+
+async def loop_vacas():
+
+    while True:
+
+        await asyncio.sleep(0.1)
+
+        for codigo, vacas in vacas_por_sala.items():
+
+            for vid, v in vacas.items():
+
+                # cambiar dirección
+                v["tiempo"] -= 0.1
+
+                if v["tiempo"] <= 0:
+                    v["tiempo"] = random.uniform(1, 3)
+
+                    v["dir_x"] = random.uniform(-1, 1)
+                    v["dir_y"] = random.uniform(-1, 1)
+
+                # mover
+                velocidad = 2
+
+                v["x"] += v["dir_x"] * velocidad
+                v["y"] += v["dir_y"] * velocidad
+
+                # flip
+                flip = v["dir_x"] < 0
+
+                # enviar a la sala
+                await enviar_a_sala(codigo, {
+                    "tipo": "npc_movimiento",
+                    "id": vid,
+                    "x": v["x"],
+                    "y": v["y"],
+                    "flip": flip
+                })
+
+
 async def enviar_a_sala(codigo, data):
 
     if codigo not in salas:
@@ -160,6 +215,7 @@ async def manejar(ws):
 
                 codigo = generar_codigo()
                 salas[codigo] = [ws]
+                crear_vacas_para_sala(codigo)
 
                 if player_id in jugadores:
                     jugador_data = jugadores[player_id]
@@ -213,6 +269,9 @@ async def manejar(ws):
 
                 if ws not in salas[codigo]:
                     salas[codigo].append(ws)
+
+                if codigo not in vacas_por_sala:
+                    crear_vacas_para_sala(codigo)
 
                 if player_id in jugadores:
                     jugador_data = jugadores[player_id]
@@ -368,6 +427,8 @@ async def main():
     cargar_jugadores()
 
     print("Servidor iniciado en puerto", PORT)
+
+    asyncio.create_task(loop_vacas())  #  IMPORTANTE
 
     async with websockets.serve(
         manejar,
