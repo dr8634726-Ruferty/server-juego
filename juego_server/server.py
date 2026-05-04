@@ -325,6 +325,25 @@ async def manejar(ws):
                 if codigo in salas:
                     await enviar_lista_jugadores(codigo)
 
+            elif tipo == "spawn_npc":
+
+                codigo = clientes[ws]["sala"]
+
+                if codigo not in vacas_por_sala:
+                    vacas_por_sala[codigo] = {}
+
+                vaca_id = data.get("id")
+
+                vacas_por_sala[codigo][vaca_id] = {
+                    "x": data.get("x", 100),
+                    "y": data.get("y", 100),
+                    "dir_x": random.uniform(-1, 1),
+                    "dir_y": random.uniform(-1, 1),
+                    "tiempo": random.uniform(1, 3)
+                }
+
+                print("🐄 Vaca creada:", vaca_id, "en sala", codigo)
+
             elif tipo == "movimiento":
 
                 if ws not in clientes:
