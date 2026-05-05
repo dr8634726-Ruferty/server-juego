@@ -132,9 +132,11 @@ async def loop_vacas():
                     else:
                         player_obj = None
 
+                        print("DEBUG buscando player:", v["siguiendo"])
+
                         for ws2 in salas[codigo]:
                             if ws2 in clientes:
-                                if clientes[ws2]["id"] == v["siguiendo"]:
+                                if str(clientes[ws2]["id"]) == str(v["siguiendo"]):
                                     player_obj = clientes[ws2]
                                     break
 
@@ -159,8 +161,14 @@ async def loop_vacas():
                             })
 
                         else:
-                            # 🔥 NO CANCELAR SEGUIMIENTO
-                            # solo espera al siguiente frame
+                            await enviar_a_sala(codigo, {
+                                "tipo": "npc_movimiento",
+                                "id": vid,
+                                "x": v["x"],
+                                "y": v["y"],
+                                "flip": False,
+                                "siguiendo": True
+                            })
                             continue
 
                     continue
@@ -422,6 +430,8 @@ async def manejar(ws):
                     # 🔥 ACTIVAR SEGUIMIENTO
                     vaca["siguiendo"] = player_id
                     vaca["tiempo_seguir"] = 60  # 1 minuto real
+
+                    print("DEBUG siguiendo guardado:", vaca["siguiendo"])
 
                     print("🐄 Ahora sigue por 60 segundos")
 
