@@ -130,38 +130,46 @@ async def loop_vacas():
                     if v["tiempo_seguir"] <= 0:
                         v["siguiendo"] = None
                     else:
-                        encontro = False
+                        player_obj = None
 
                         for ws2 in salas[codigo]:
-                            if ws2 in clientes and str(clientes[ws2]["id"]) == str(v["siguiendo"]):
+                            if ws2 in clientes:
+                                if clientes[ws2]["id"] == v["siguiendo"]:
+                                    player_obj = clientes[ws2]
+                                    break
 
-                                encontro = True
-                                player = clientes[ws2]
+                        if player_obj:
+                            dx = player_obj["x"] - v["x"]
+                            dy = player_obj["y"] - v["y"]
 
-                                dx = player["x"] - v["x"]
-                                dy = player["y"] - v["y"]
+                            dist = max((dx**2 + dy**2)**0.5, 0.01)
 
-                                dist = max((dx**2 + dy**2)**0.5, 0.01)
+                            vel = 6  # o 8 si quieres más agresiva
 
-                                v["x"] += (dx / dist) * 3
-                                v["y"] += (dy / dist) * 3
+                            v["x"] += (dx / dist) * vel
+                            v["y"] += (dy / dist) * vel
 
-                                flip = dx < 0
+                            flip = dx < 0
 
-                                await enviar_a_sala(codigo, {
-                                    "tipo": "npc_movimiento",
-                                    "id": vid,
-                                    "x": v["x"],
-                                    "y": v["y"],
-                                    "flip": flip,
-                                    "siguiendo": True
-                                })
-
-                                break
-
-                        if not encontro:
-                            v["tiempo_seguir"] -= 0.1  # sigue consumiendo tiempo
-                            continue
+                            await enviar_a_sala(codigo, {
+                                "tipo": "npc_movimiento",
+                                "id": vid,
+                                "x": v["x"],
+                                "y": v["y"],
+                                "flip": flip,
+                                "siguiendo": True
+                            })
+                        else:
+                            # 🔥 IMPORTANTE: AVISAR QUE YA NO SIGUE
+                            await enviar_a_sala(codigo, {
+                                "tipo": "npc_movimiento",
+                                "id": vid,
+                                "x": v["x"],
+                                "y": v["y"],
+                                "flip": False,
+                                "siguiendo": False
+                            })
+                            v["siguiendo"] = None
 
                     continue
 
@@ -189,7 +197,8 @@ async def loop_vacas():
                     "id": vid,
                     "x": v["x"],
                     "y": v["y"],
-                    "flip": flip
+                    "flip": flip,
+                    "siguiendo": False   # 🔥 CLAVE
                 })
 
 
