@@ -144,10 +144,8 @@ async def loop_vacas():
 
                             dist = max((dx**2 + dy**2)**0.5, 0.01)
 
-                            vel = 6  # o 8 si quieres más agresiva
-
-                            v["x"] += (dx / dist) * vel
-                            v["y"] += (dy / dist) * vel
+                            v["x"] += (dx / dist) * 6
+                            v["y"] += (dy / dist) * 6
 
                             flip = dx < 0
 
@@ -159,17 +157,11 @@ async def loop_vacas():
                                 "flip": flip,
                                 "siguiendo": True
                             })
+
                         else:
-                            # 🔥 IMPORTANTE: AVISAR QUE YA NO SIGUE
-                            await enviar_a_sala(codigo, {
-                                "tipo": "npc_movimiento",
-                                "id": vid,
-                                "x": v["x"],
-                                "y": v["y"],
-                                "flip": False,
-                                "siguiendo": False
-                            })
-                            v["siguiendo"] = None
+                            # 🔥 NO CANCELAR SEGUIMIENTO
+                            # solo espera al siguiente frame
+                            continue
 
                     continue
 
@@ -198,7 +190,7 @@ async def loop_vacas():
                     "x": v["x"],
                     "y": v["y"],
                     "flip": flip,
-                    "siguiendo": False   # 🔥 CLAVE
+                    "siguiendo": v.get("siguiendo") is not None
                 })
 
 
