@@ -123,16 +123,19 @@ async def loop_vacas():
             for vid, v in vacas.items():
 
                 # 🧠 SI ESTÁ SIGUIENDO A UN PLAYER
-                if v.get("siguiendo"):
+                if v.get("siguiendo") is not None:
 
                     v["tiempo_seguir"] -= 0.1
 
                     if v["tiempo_seguir"] <= 0:
                         v["siguiendo"] = None
                     else:
-                        for ws2 in salas[codigo]:
-                            if ws2 in clientes and clientes[ws2]["id"] == v["siguiendo"]:
+                        encontro = False
 
+                        for ws2 in salas[codigo]:
+                            if ws2 in clientes and str(clientes[ws2]["id"]) == str(v["siguiendo"]):
+
+                                encontro = True
                                 player = clientes[ws2]
 
                                 dx = player["x"] - v["x"]
@@ -151,10 +154,14 @@ async def loop_vacas():
                                     "x": v["x"],
                                     "y": v["y"],
                                     "flip": flip,
-                                    "siguiendo": v.get("siguiendo") is not None
+                                    "siguiendo": True
                                 })
 
                                 break
+
+                        if not encontro:
+                            v["tiempo_seguir"] -= 0.1  # sigue consumiendo tiempo
+                            continue
 
                     continue
 
@@ -379,7 +386,11 @@ async def manejar(ws):
                     "y": data.get("y", 100),
                     "dir_x": random.uniform(-1, 1),
                     "dir_y": random.uniform(-1, 1),
-                    "tiempo": random.uniform(1, 3)
+                    "tiempo": random.uniform(1, 3),
+
+                    # 🔥 NECESARIO PARA SEGUIR
+                    "siguiendo": None,
+                    "tiempo_seguir": 0
                 }
 
                 vacas_por_sala[codigo][vaca_id] = vaca
@@ -398,9 +409,20 @@ async def manejar(ws):
             elif tipo == "alimentar_vaca":
 
                 codigo = clientes[ws]["sala"]
-                vaca_id = data.get("vaca_id")
+                vaca_id = data.get("vaca_id")  # 👈 mismo nombre que el player
+                player_id = clientes[ws]["id"]  # 🔥 EXACTAMENTE EL MISMO ID QUE GUARDA EL SERVER
 
-                print("🐄 Alimentar vaca recibido:", vaca_id, "en sala", codigo)
+                print("🐄 Alimentando:", vaca_id, "→ jugador:", player_id)
+
+                if codigo in vacas_por_sala and vaca_id in vacas_por_sala[codigo]:
+
+                    vaca = vacas_por_sala[codigo][vaca_id]
+
+                    # 🔥 ACTIVAR SEGUIMIENTO
+                    vaca["siguiendo"] = player_id
+                    vaca["tiempo_seguir"] = 60  # 1 minuto real
+
+                    print("🐄 Ahora sigue por 60 segundos")
 
             elif tipo == "movimiento":
 
