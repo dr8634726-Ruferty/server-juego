@@ -104,7 +104,11 @@ def crear_vacas_para_sala(codigo):
             "y": random.randint(100, 400),
             "dir_x": random.uniform(-1, 1),
             "dir_y": random.uniform(-1, 1),
-            "tiempo": random.uniform(1, 3)
+            "tiempo": random.uniform(1, 3),
+
+            # 🔥 NUEVO
+            "siguiendo": None,
+            "tiempo_seguir": 0
         }
 
 
@@ -117,6 +121,42 @@ async def loop_vacas():
         for codigo, vacas in vacas_por_sala.items():
 
             for vid, v in vacas.items():
+
+                # 🧠 SI ESTÁ SIGUIENDO A UN PLAYER
+                if v.get("siguiendo"):
+
+                    v["tiempo_seguir"] -= 0.1
+
+                    if v["tiempo_seguir"] <= 0:
+                        v["siguiendo"] = None
+                    else:
+                        for ws2 in salas[codigo]:
+                            if ws2 in clientes and clientes[ws2]["id"] == v["siguiendo"]:
+
+                                player = clientes[ws2]
+
+                                dx = player["x"] - v["x"]
+                                dy = player["y"] - v["y"]
+
+                                dist = max((dx**2 + dy**2)**0.5, 0.01)
+
+                                v["x"] += (dx / dist) * 3
+                                v["y"] += (dy / dist) * 3
+
+                                flip = dx < 0
+
+                                await enviar_a_sala(codigo, {
+                                    "tipo": "npc_movimiento",
+                                    "id": vid,
+                                    "x": v["x"],
+                                    "y": v["y"],
+                                    "flip": flip,
+                                    "siguiendo": v.get("siguiendo") is not None
+                                })
+
+                                break
+
+                    continue
 
                 # cambiar dirección
                 v["tiempo"] -= 0.1
@@ -354,6 +394,13 @@ async def manejar(ws):
                     "y": vaca["y"],
                     "flip": False
                 })
+
+            elif tipo == "alimentar_vaca":
+
+                codigo = clientes[ws]["sala"]
+                vaca_id = data.get("vaca_id")
+
+                print("🐄 Alimentar vaca recibido:", vaca_id, "en sala", codigo)
 
             elif tipo == "movimiento":
 
