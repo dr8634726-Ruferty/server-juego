@@ -297,9 +297,8 @@ async def manejar(ws):
                     "y": y,
                     "progreso": 0,
                     "nivel": 0,
-                    "flip": False,
-                    "muerto": False  # 🔥 IMPORTANTE
-            }
+                    "flip": False
+                }
 
                 guardar_salas()
 
@@ -347,15 +346,14 @@ async def manejar(ws):
                     nombre = data.get("nombre", "Jugador")
 
                 clientes[ws] = {
-                "sala": codigo,
-                "id": player_id,
-                "nombre": nombre,
-                "x": x,
-                "y": y,
-                "progreso": 0,
-                "nivel": 0,
-                "flip": False,
-                "muerto": False  # 🔥 IMPORTANTE
+                    "sala": codigo,
+                    "id": player_id,
+                    "nombre": nombre,
+                    "x": x,
+                    "y": y,
+                    "progreso": 0,
+                    "nivel": 0,
+                    "flip": False
                 }
 
                 await ws.send(json.dumps({
@@ -445,39 +443,7 @@ async def manejar(ws):
                 codigo = clientes[ws]["sala"]
                 c = clientes[ws]
 
-                # 🔴 SI EL CLIENTE REPORTA MUERTO
-                if data.get("muerto", False):
-                    c["muerto"] = True
-
-                    await enviar_a_sala(codigo, {
-                        "tipo": "movimiento",
-                        "id": c["id"],
-                        "muerto": True
-                    })
-                    continue
-
-                # 🔴 SI REVIVE
-                if c.get("muerto", False) and data.get("muerto") == False:
-                    c["muerto"] = False
-
-                    await enviar_a_sala(codigo, {
-                        "tipo": "movimiento",
-                        "id": c["id"],
-                        "x": c["x"],
-                        "y": c["y"],
-                        "nombre": c["nombre"],
-                        "progreso": c["progreso"],
-                        "nivel": c["nivel"],
-                        "flip": c["flip"],
-                        "muerto": False
-                    })
-                    continue
-
-                # 🔴 SI ESTÁ MUERTO → NO ACTUALIZA NADA
-                if c.get("muerto", False):
-                    continue
-
-                # ✅ MOVIMIENTO NORMAL
+                
                 if "x" in data:
                     c["x"] = data["x"]
 
@@ -509,10 +475,41 @@ async def manejar(ws):
                 guardar_jugadores()
 
                 data["nombre"] = c["nombre"]
-                data["muerto"] = False  # 🔥 asegurar sync
 
                 await enviar_a_sala(codigo, data)
                 await enviar_lista_jugadores(codigo)
+
+            elif tipo == "ataque":
+
+                if ws not in clientes:
+                    continue
+
+                codigo = clientes[ws]["sala"]
+                jugador_id = clientes[ws]["id"]
+
+                print("⚔️ Ataque de:", jugador_id)
+
+                await enviar_a_sala(codigo, {
+                    "tipo": "ataque",
+                    "id": jugador_id
+              })
+                
+            elif tipo == "muerte":
+
+                if ws not in clientes:
+                    continue
+
+                codigo = clientes[ws]["sala"]
+                jugador_id = clientes[ws]["id"]
+
+                print("💀 Muerte de:", jugador_id)
+
+                await enviar_a_sala(codigo, {
+                    "tipo": "muerte",
+                    "id": jugador_id
+                })
+
+
 
     except Exception as e:
         print("Cliente desconectado:", e)
