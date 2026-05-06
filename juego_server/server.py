@@ -297,8 +297,9 @@ async def manejar(ws):
                     "y": y,
                     "progreso": 0,
                     "nivel": 0,
-                    "flip": False
-                }
+                    "flip": False,
+                    "muerto": False  # 🔥 IMPORTANTE
+            }
 
                 guardar_salas()
 
@@ -346,14 +347,15 @@ async def manejar(ws):
                     nombre = data.get("nombre", "Jugador")
 
                 clientes[ws] = {
-                    "sala": codigo,
-                    "id": player_id,
-                    "nombre": nombre,
-                    "x": x,
-                    "y": y,
-                    "progreso": 0,
-                    "nivel": 0,
-                    "flip": False
+                "sala": codigo,
+                "id": player_id,
+                "nombre": nombre,
+                "x": x,
+                "y": y,
+                "progreso": 0,
+                "nivel": 0,
+                "flip": False,
+                "muerto": False  # 🔥 IMPORTANTE
                 }
 
                 await ws.send(json.dumps({
@@ -443,7 +445,7 @@ async def manejar(ws):
                 codigo = clientes[ws]["sala"]
                 c = clientes[ws]
 
-                # 🔥 SI ESTÁ MUERTO → NO ACTUALIZA POSICIÓN
+                # 🔴 SI EL CLIENTE REPORTA MUERTO
                 if data.get("muerto", False):
                     c["muerto"] = True
 
@@ -454,14 +456,9 @@ async def manejar(ws):
                     })
                     continue
 
-                # 🔥 SI ESTABA MUERTO Y REVIVE → RESET FUERTE
-                if c.get("muerto", False) == True and data.get("muerto") == False:
-                    print("🔥 REVIVE:", c["id"])
+                # 🔴 SI REVIVE
+                if c.get("muerto", False) and data.get("muerto") == False:
                     c["muerto"] = False
-
-                    # 🔥 FORZAR NUEVA POSICIÓN LIMPIA
-                    c["x"] = data.get("x", 100)
-                    c["y"] = data.get("y", 100)
 
                     await enviar_a_sala(codigo, {
                         "tipo": "movimiento",
@@ -476,7 +473,11 @@ async def manejar(ws):
                     })
                     continue
 
-                # 🔥 SOLO SI ESTÁ VIVO SE ACTUALIZA NORMAL
+                # 🔴 SI ESTÁ MUERTO → NO ACTUALIZA NADA
+                if c.get("muerto", False):
+                    continue
+
+                # ✅ MOVIMIENTO NORMAL
                 if "x" in data:
                     c["x"] = data["x"]
 
@@ -491,8 +492,6 @@ async def manejar(ws):
 
                 if "flip" in data:
                     c["flip"] = data["flip"]
-
-                c["muerto"] = False
 
                 if player_id not in jugadores:
                     jugadores[player_id] = {
@@ -510,7 +509,7 @@ async def manejar(ws):
                 guardar_jugadores()
 
                 data["nombre"] = c["nombre"]
-                data["muerto"] = False
+                data["muerto"] = False  # 🔥 asegurar sync
 
                 await enviar_a_sala(codigo, data)
                 await enviar_lista_jugadores(codigo)
