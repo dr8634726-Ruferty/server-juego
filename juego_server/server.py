@@ -443,7 +443,40 @@ async def manejar(ws):
                 codigo = clientes[ws]["sala"]
                 c = clientes[ws]
 
-                
+                # 🔥 SI ESTÁ MUERTO → NO ACTUALIZA POSICIÓN
+                if data.get("muerto", False):
+                    c["muerto"] = True
+
+                    await enviar_a_sala(codigo, {
+                        "tipo": "movimiento",
+                        "id": c["id"],
+                        "muerto": True
+                    })
+                    continue
+
+                # 🔥 SI ESTABA MUERTO Y REVIVE → RESET FUERTE
+                if c.get("muerto", False) == True and data.get("muerto") == False:
+                    print("🔥 REVIVE:", c["id"])
+                    c["muerto"] = False
+
+                    # 🔥 FORZAR NUEVA POSICIÓN LIMPIA
+                    c["x"] = data.get("x", 100)
+                    c["y"] = data.get("y", 100)
+
+                    await enviar_a_sala(codigo, {
+                        "tipo": "movimiento",
+                        "id": c["id"],
+                        "x": c["x"],
+                        "y": c["y"],
+                        "nombre": c["nombre"],
+                        "progreso": c["progreso"],
+                        "nivel": c["nivel"],
+                        "flip": c["flip"],
+                        "muerto": False
+                    })
+                    continue
+
+                # 🔥 SOLO SI ESTÁ VIVO SE ACTUALIZA NORMAL
                 if "x" in data:
                     c["x"] = data["x"]
 
@@ -458,6 +491,8 @@ async def manejar(ws):
 
                 if "flip" in data:
                     c["flip"] = data["flip"]
+
+                c["muerto"] = False
 
                 if player_id not in jugadores:
                     jugadores[player_id] = {
@@ -475,6 +510,7 @@ async def manejar(ws):
                 guardar_jugadores()
 
                 data["nombre"] = c["nombre"]
+                data["muerto"] = False
 
                 await enviar_a_sala(codigo, data)
                 await enviar_lista_jugadores(codigo)
