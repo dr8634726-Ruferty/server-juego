@@ -269,6 +269,7 @@ async def manejar(ws):
             ]
 
             if tipo not in tipos_sin_id and not player_id:
+
                 if ws in clientes:
                     player_id = clientes[ws]["id"]
                 else:
@@ -498,10 +499,12 @@ async def manejar(ws):
                 print("⚔️ Ataque de:", jugador_id)
 
                 await enviar_a_sala(codigo, {
-                    "tipo": "ataque",
-                    "id": jugador_id
-              })
-                
+                "tipo": "ataque",
+                "id": jugador_id,
+                "x": clientes[ws]["x"],
+                "y": clientes[ws]["y"]
+            })
+                            
             elif tipo == "muerte":
 
                 if ws not in clientes:
