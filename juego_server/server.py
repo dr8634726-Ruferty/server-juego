@@ -263,8 +263,16 @@ async def manejar(ws):
             tipo = data.get("tipo", "")
             player_id = data.get("id")
 
-            if not player_id and tipo not in ["listar_salas", "listar_jugadores"]:
-                continue
+            tipos_sin_id = [
+                "listar_salas",
+                "listar_jugadores"
+            ]
+
+            if tipo not in tipos_sin_id and not player_id:
+                if ws in clientes:
+                    player_id = clientes[ws]["id"]
+                else:
+                    continue
 
 
             if tipo == "crear_sala":
