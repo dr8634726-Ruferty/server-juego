@@ -444,6 +444,30 @@ async def manejar(ws):
 
                     print("🐄 Ahora sigue por 60 segundos")
 
+
+            elif tipo == "chat":
+
+                if ws not in clientes:
+                    continue
+
+                codigo = clientes[ws]["sala"]
+
+                nombre = clientes[ws]["nombre"]
+
+                mensaje = str(data.get("mensaje", "")).strip()[:120]
+
+                if mensaje == "":
+                    continue
+
+                print(f"💬 {nombre}: {mensaje}")
+
+                await enviar_a_sala(codigo, {
+                    "tipo": "chat",
+                    "nombre": nombre,
+                    "mensaje": mensaje
+                })
+
+
             elif tipo == "movimiento":
 
                 if ws not in clientes:
