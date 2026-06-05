@@ -483,6 +483,9 @@ async def manejar(ws):
                 if "y" in data:
                     c["y"] = data["y"]
 
+                if "nombre" in data:
+                    c["nombre"] = data["nombre"]
+
                 if "progreso" in data:
                     c["progreso"] = data["progreso"]
 
@@ -498,6 +501,7 @@ async def manejar(ws):
                         "salas": {}
                     }
 
+                jugadores[player_id]["nombre"] = c["nombre"]
                 jugadores[player_id].setdefault("salas", {})
 
                 jugadores[player_id]["salas"][codigo] = {
