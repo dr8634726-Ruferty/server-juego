@@ -96,7 +96,7 @@ def crear_vacas_para_sala(codigo):
 
     vacas_por_sala[codigo] = {}
 
-    for i in range(3):  # 👈 cantidad de vacas
+    for i in range(0):  # 👈 cantidad de vacas
         vaca_id = f"vaca_{i}"
 
         vacas_por_sala[codigo][vaca_id] = {
