@@ -438,7 +438,7 @@ async def manejar(ws):
 
                     # 🔥 ACTIVAR SEGUIMIENTO
                     vaca["siguiendo"] = player_id
-                    vaca["tiempo_seguir"] = 60  # 1 minuto real
+                    vaca["tiempo_seguir"] = 20  # 1 minuto real
 
                     print("DEBUG siguiendo guardado:", vaca["siguiendo"])
 
@@ -532,7 +532,35 @@ async def manejar(ws):
                 "x": clientes[ws]["x"],
                 "y": clientes[ws]["y"]
             })
-                            
+
+            
+            elif tipo == "portal":
+
+                if ws not in clientes:
+                    continue
+
+                codigo = clientes[ws]["sala"]
+
+                portal_id = int(data.get("portal", 0))
+                visible = bool(data.get("visible", False))
+
+                print(
+                    "🌀 Portal cambiado:",
+                    portal_id,
+                    "visible:",
+                    visible,
+                    "sala:",
+                    codigo
+                )
+
+                # 🔥 ENVIAR EL CAMBIO A TODOS LOS JUGADORES
+                await enviar_a_sala(codigo, {
+                    "tipo": "portal",
+                    "portal": portal_id,
+                    "visible": visible
+                })        
+
+            
             elif tipo == "muerte":
 
                 if ws not in clientes:
