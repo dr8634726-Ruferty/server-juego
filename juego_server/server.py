@@ -1595,7 +1595,32 @@ async def enviar_lista_salas_a_todos():
             pass
 
 
+    elif tipo == "cambiar_nombre_sala":
     
+        codigo = str(data.get("codigo", "")).strip()
+        nuevo_nombre = str(data.get("nombre", "")).strip()
+    
+        if codigo not in salas:
+            continue
+    
+        if nuevo_nombre == "":
+            continue
+    
+        nuevo_nombre = nuevo_nombre[:40]
+    
+        nombres_salas[codigo] = nuevo_nombre
+    
+        guardar_salas()
+    
+        print(
+            "✏️ Nombre cambiado:",
+            codigo,
+            "→",
+            nuevo_nombre
+        )
+    
+        await enviar_lista_salas_a_todos()
+
 
 
 async def main():
