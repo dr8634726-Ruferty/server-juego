@@ -10,9 +10,7 @@ PORT = int(os.environ.get("PORT", 8765))
 
 clientes = {}
 salas = {}
-nombres_salas = {}
 vacas_por_sala = {}
-
 
 ARCHIVO_SALAS = "salas.json"
 ARCHIVO_JUGADORES = "jugadores.json"
@@ -26,7 +24,7 @@ INTERVALO_GUARDADO = 5
 
 
 def cargar_salas():
-    global salas, nombres_salas
+    global salas
 
     if os.path.exists(ARCHIVO_SALAS):
         try:
@@ -34,44 +32,15 @@ def cargar_salas():
                 data = json.load(f)
 
                 salas = {}
-                nombres_salas = {}
 
-                # FORMATO NUEVO
-                if isinstance(data, list):
-
-                    for sala in data:
-
-                        # Compatibilidad con el formato antiguo:
-                        # ["ABC123", "XYZ789"]
-                        if isinstance(sala, str):
-
-                            codigo = sala
-                            nombre = "Sala " + codigo
-
-                        # Formato nuevo:
-                        # [{"codigo":"ABC123","nombre":"Historia"}]
-                        else:
-
-                            codigo = str(sala.get("codigo", ""))
-                            nombre = str(
-                                sala.get(
-                                    "nombre",
-                                    "Sala " + codigo
-                                )
-                            )
-
-                        if codigo != "":
-                            salas[codigo] = []
-                            nombres_salas[codigo] = nombre
+                for codigo in data:
+                    salas[codigo] = []
 
                 print("Salas cargadas:", list(salas.keys()))
-                print("Nombres de salas:", nombres_salas)
 
         except Exception as e:
             print("Error cargando salas:", e)
-
             salas = {}
-            nombres_salas = {}
 
 
 
@@ -90,21 +59,10 @@ def cargar_jugadores():
 
 def guardar_salas():
     try:
-
-        lista = []
-
-        for codigo in salas.keys():
-
-            lista.append({
-                "codigo": codigo,
-                "nombre": nombres_salas.get(
-                    codigo,
-                    "Sala " + codigo
-                )
-            })
+        lista = list(salas.keys())
 
         with open(ARCHIVO_SALAS, "w") as f:
-            json.dump(lista, f, indent=4, ensure_ascii=False)
+            json.dump(lista, f, indent=4)
 
     except Exception as e:
         print("Error guardando salas:", e)
@@ -317,26 +275,12 @@ async def manejar(ws):
                 else:
                     continue
 
-    
-                if tipo == "crear_sala":
-                    
-                    codigo = generar_codigo()
-                
-                    nombre_sala = str(
-                        data.get("nombre_sala", "")
-                    ).strip()
-                
-                    if nombre_sala == "":
-                        nombre_sala = "Sala " + codigo
-                
-                    # Limitar el nombre
-                    nombre_sala = nombre_sala[:40]
-                
-                    salas[codigo] = [ws]
-                
-                    nombres_salas[codigo] = nombre_sala
-                
-                    crear_vacas_para_sala(codigo)
+
+            if tipo == "crear_sala":
+
+                codigo = generar_codigo()
+                salas[codigo] = [ws]
+                crear_vacas_para_sala(codigo)
 
                 if player_id in jugadores:
                     jugador_data = jugadores[player_id]
@@ -369,8 +313,7 @@ async def manejar(ws):
 
                 await ws.send(json.dumps({
                     "tipo": "sala_creada",
-                    "codigo": codigo,
-                    "nombre": nombre_sala
+                    "codigo": codigo
                 }))
 
                 print("Sala creada:", codigo)
@@ -434,22 +377,10 @@ async def manejar(ws):
 
             elif tipo == "listar_salas":
 
-                    lista_salas = []
-                
-                    for codigo in salas.keys():
-                
-                        lista_salas.append({
-                            "codigo": codigo,
-                            "nombre": nombres_salas.get(
-                                codigo,
-                                "Sala " + codigo
-                            )
-                        })
-                
-                    await ws.send(json.dumps({
-                        "tipo": "salas",
-                        "salas": lista_salas
-                    }))
+                await ws.send(json.dumps({
+                    "tipo": "salas",
+                    "salas": list(salas.keys())
+                }))
 
 
             elif tipo == "listar_jugadores":
