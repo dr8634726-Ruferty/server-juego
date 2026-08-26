@@ -318,16 +318,16 @@ async def manejar(ws):
                     continue
 
     
-            if tipo == "crear_sala":
+                if tipo == "crear_sala":
                     
-                codigo = generar_codigo()
+                    codigo = generar_codigo()
                 
-                nombre_sala = str(
-                     data.get("nombre_sala", "")
-                ).strip()
+                    nombre_sala = str(
+                        data.get("nombre_sala", "")
+                    ).strip()
                 
-                 if nombre_sala == "":
-                    nombre_sala = "Sala " + codigo
+                    if nombre_sala == "":
+                        nombre_sala = "Sala " + codigo
                 
                     # Limitar el nombre
                     nombre_sala = nombre_sala[:40]
@@ -452,51 +452,6 @@ async def manejar(ws):
                     }))
 
 
-
-            elif tipo == "cambiar_nombre_sala":
-            
-                if ws not in clientes:
-                    continue
-            
-                codigo = clientes[ws]["sala"]
-            
-                nuevo_nombre = str(
-                    data.get("nombre", "")
-                ).strip()
-            
-                if nuevo_nombre == "":
-                    continue
-            
-                nuevo_nombre = nuevo_nombre[:40]
-            
-                if codigo not in salas:
-                    continue
-            
-                # Cambiar nombre
-                nombres_salas[codigo] = nuevo_nombre
-            
-                # Guardar en salas.json
-                guardar_salas()
-            
-                print(
-                    "✏️ Nombre de sala cambiado:",
-                    codigo,
-                    "→",
-                    nuevo_nombre
-                )
-            
-                # 🔥 ENVIAR EL NUEVO NOMBRE A TODOS
-                await enviar_a_sala(codigo, {
-                    "tipo": "nombre_sala_cambiado",
-                    "codigo": codigo,
-                    "nombre": nuevo_nombre
-                })
-            
-                # 🔥 También avisar a quienes están viendo el selector
-                # Esto lo hacemos abajo de otra manera.
-
-
-            
             elif tipo == "listar_jugadores":
 
                 codigo = data.get("codigo", "")
@@ -743,63 +698,6 @@ async def responder_http(path, request_headers):
         ],
         body
     )
-
-
-
-async def enviar_lista_salas_a_todos():
-
-    lista_salas = []
-
-    for codigo in salas.keys():
-
-        lista_salas.append({
-            "codigo": codigo,
-            "nombre": nombres_salas.get(
-                codigo,
-                "Sala " + codigo
-            )
-        })
-
-    mensaje = json.dumps({
-        "tipo": "salas",
-        "salas": lista_salas
-    })
-
-    for ws in list(clientes.keys()):
-
-        try:
-            await ws.send(mensaje)
-        except:
-            pass
-
-
-elif tipo == "cambiar_nombre_sala":
-
-    codigo = str(data.get("codigo", "")).strip()
-    nuevo_nombre = str(data.get("nombre", "")).strip()
-
-    if codigo not in salas:
-        continue
-
-    if nuevo_nombre == "":
-        continue
-
-    nuevo_nombre = nuevo_nombre[:40]
-
-    nombres_salas[codigo] = nuevo_nombre
-
-    guardar_salas()
-
-    print(
-        "✏️ Nombre cambiado:",
-        codigo,
-        "→",
-        nuevo_nombre
-    )
-
-    await enviar_lista_salas_a_todos()
-
-
 
 async def main():
 
