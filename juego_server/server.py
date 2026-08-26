@@ -16,69 +16,51 @@ ARCHIVO_SALAS = "salas.json"
 ARCHIVO_JUGADORES = "jugadores.json"
 
 jugadores = {}
-
-
 ultimo_guardado = 0
-INTERVALO_GUARDADO = 5  
-
+INTERVALO_GUARDADO = 5
 
 
 def cargar_salas():
     global salas
-
     if os.path.exists(ARCHIVO_SALAS):
         try:
             with open(ARCHIVO_SALAS, "r") as f:
                 data = json.load(f)
-
-                salas = {}
-
-                for codigo in data:
-                    salas[codigo] = []
-
+                salas = {codigo: [] for codigo in data}
                 print("Salas cargadas:", list(salas.keys()))
-
         except Exception as e:
             print("Error cargando salas:", e)
             salas = {}
 
 
-
 def cargar_jugadores():
     global jugadores
-
     if os.path.exists(ARCHIVO_JUGADORES):
         try:
             with open(ARCHIVO_JUGADORES, "r") as f:
                 jugadores = json.load(f)
                 print("Jugadores cargados:", len(jugadores))
-        except:
+        except Exception as e:
+            print("Error cargando jugadores:", e)
             jugadores = {}
-
 
 
 def guardar_salas():
     try:
         lista = list(salas.keys())
-
         with open(ARCHIVO_SALAS, "w") as f:
             json.dump(lista, f, indent=4)
-
     except Exception as e:
         print("Error guardando salas:", e)
 
 
-
-def guardar_jugadores():
+def guardar_jugadores(forzado=False):
     global ultimo_guardado
-
     ahora = time.time()
-
-    if ahora - ultimo_guardado < INTERVALO_GUARDADO:
+    if not forzado and (ahora - ultimo_guardado < INTERVALO_GUARDADO):
         return
 
     ultimo_guardado = ahora
-
     try:
         with open(ARCHIVO_JUGADORES, "w") as f:
             json.dump(jugadores, f, indent=4)
@@ -86,69 +68,42 @@ def guardar_jugadores():
         print("Error guardando jugadores:", e)
 
 
-
 def generar_codigo():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
-
 def crear_vacas_para_sala(codigo):
-
     vacas_por_sala[codigo] = {}
-
-    for i in range(0):  # 👈 cantidad de vacas
-        vaca_id = f"vaca_{i}"
-
-        vacas_por_sala[codigo][vaca_id] = {
-            "x": random.randint(100, 400),
-            "y": random.randint(100, 400),
-            "dir_x": random.uniform(-1, 1),
-            "dir_y": random.uniform(-1, 1),
-            "tiempo": random.uniform(1, 3),
-
-            # 🔥 NUEVO
-            "siguiendo": None,
-            "tiempo_seguir": 0
-        }
 
 
 async def loop_vacas():
-
     while True:
-
         await asyncio.sleep(0.1)
 
-        for codigo, vacas in vacas_por_sala.items():
+        for codigo, vacas in list(vacas_por_sala.items()):
+            if codigo not in salas:
+                continue
 
-            for vid, v in vacas.items():
-
-                # 🧠 SI ESTÁ SIGUIENDO A UN PLAYER
+            for vid, v in list(vacas.items()):
                 if v.get("siguiendo") is not None:
-
                     v["tiempo_seguir"] -= 0.1
 
                     if v["tiempo_seguir"] <= 0:
                         v["siguiendo"] = None
                     else:
                         player_obj = None
-
-                        print("DEBUG buscando player:", v["siguiendo"])
-
-                        for ws2 in salas[codigo]:
-                            if ws2 in clientes:
-                                if str(clientes[ws2]["id"]) == str(v["siguiendo"]):
-                                    player_obj = clientes[ws2]
-                                    break
+                        for ws2 in list(salas.get(codigo, [])):
+                            if ws2 in clientes and str(clientes[ws2]["id"]) == str(v["siguiendo"]):
+                                player_obj = clientes[ws2]
+                                break
 
                         if player_obj:
                             dx = player_obj["x"] - v["x"]
                             dy = player_obj["y"] - v["y"]
-
-                            dist = max((dx**2 + dy**2)**0.5, 0.01)
+                            dist = max((dx ** 2 + dy ** 2) ** 0.5, 0.01)
 
                             v["x"] += (dx / dist) * 6
                             v["y"] += (dy / dist) * 6
-
                             flip = dx < 0
 
                             await enviar_a_sala(codigo, {
@@ -159,7 +114,6 @@ async def loop_vacas():
                                 "flip": flip,
                                 "siguiendo": True
                             })
-
                         else:
                             await enviar_a_sala(codigo, {
                                 "tipo": "npc_movimiento",
@@ -167,68 +121,58 @@ async def loop_vacas():
                                 "x": v["x"],
                                 "y": v["y"],
                                 "flip": False,
-                                "siguiendo": True
+                                "siguiendo": False
                             })
-                            continue
+                        continue
 
-                    continue
-
-                # cambiar dirección
                 v["tiempo"] -= 0.1
-
                 if v["tiempo"] <= 0:
                     v["tiempo"] = random.uniform(1, 3)
-
                     v["dir_x"] = random.uniform(-1, 1)
                     v["dir_y"] = random.uniform(-1, 1)
 
-                # mover
                 velocidad = 2
-
                 v["x"] += v["dir_x"] * velocidad
                 v["y"] += v["dir_y"] * velocidad
-
-                # flip
                 flip = v["dir_x"] < 0
 
-                # enviar a la sala
                 await enviar_a_sala(codigo, {
                     "tipo": "npc_movimiento",
                     "id": vid,
                     "x": v["x"],
                     "y": v["y"],
                     "flip": flip,
-                    "siguiendo": v.get("siguiendo") is not None
+                    "siguiendo": False
                 })
 
 
-async def enviar_a_sala(codigo, data):
+async def loop_guardado_autoclean():
+    while True:
+        await asyncio.sleep(INTERVALO_GUARDADO)
+        guardar_jugadores(forzado=True)
 
+
+async def enviar_a_sala(codigo, data):
     if codigo not in salas:
         return
 
     mensaje = json.dumps(data)
-
     for ws in list(salas[codigo]):
         try:
             await ws.send(mensaje)
-        except:
+        except Exception:
             if ws in salas[codigo]:
                 salas[codigo].remove(ws)
 
 
-
 async def enviar_lista_jugadores(codigo):
-
     if codigo not in salas:
         return
 
     lista = []
-
-    for ws in salas[codigo]:
+    for ws in list(salas[codigo]):
         if ws in clientes:
             c = clientes[ws]
-
             lista.append({
                 "id": c["id"],
                 "nombre": c["nombre"],
@@ -245,39 +189,27 @@ async def enviar_lista_jugadores(codigo):
     })
 
 
-
 async def manejar(ws):
-
     print("Cliente conectado")
-
     try:
-
         async for mensaje in ws:
-
             try:
                 data = json.loads(mensaje)
-            except:
+            except Exception:
                 print("JSON inválido")
                 continue
 
             tipo = data.get("tipo", "")
             player_id = data.get("id")
 
-            tipos_sin_id = [
-                "listar_salas",
-                "listar_jugadores"
-            ]
-
+            tipos_sin_id = ["listar_salas", "listar_jugadores"]
             if tipo not in tipos_sin_id and not player_id:
-
                 if ws in clientes:
                     player_id = clientes[ws]["id"]
                 else:
                     continue
 
-
             if tipo == "crear_sala":
-
                 codigo = generar_codigo()
                 salas[codigo] = [ws]
                 crear_vacas_para_sala(codigo)
@@ -285,14 +217,9 @@ async def manejar(ws):
                 if player_id in jugadores:
                     jugador_data = jugadores[player_id]
                     nombre = jugador_data.get("nombre", "Jugador")
-
-                    if codigo in jugador_data.get("salas", {}):
-                        pos = jugador_data["salas"][codigo]
-                        x = pos.get("x", 100)
-                        y = pos.get("y", 100)
-                    else:
-                        x = 100
-                        y = 100
+                    pos = jugador_data.get("salas", {}).get(codigo, {})
+                    x = pos.get("x", 100)
+                    y = pos.get("y", 100)
                 else:
                     x = 100
                     y = 100
@@ -310,26 +237,14 @@ async def manejar(ws):
                 }
 
                 guardar_salas()
-
-                await ws.send(json.dumps({
-                    "tipo": "sala_creada",
-                    "codigo": codigo
-                }))
-
+                await ws.send(json.dumps({"tipo": "sala_creada", "codigo": codigo}))
                 print("Sala creada:", codigo)
-
                 await enviar_lista_jugadores(codigo)
 
-
             elif tipo == "unirse_sala":
-
                 codigo = data.get("codigo", "")
-
                 if codigo not in salas:
-                    await ws.send(json.dumps({
-                        "tipo": "error",
-                        "mensaje": "Sala no existe"
-                    }))
+                    await ws.send(json.dumps({"tipo": "error", "mensaje": "Sala no existe"}))
                     continue
 
                 if ws not in salas[codigo]:
@@ -341,14 +256,9 @@ async def manejar(ws):
                 if player_id in jugadores:
                     jugador_data = jugadores[player_id]
                     nombre = jugador_data.get("nombre", "Jugador")
-
-                    if codigo in jugador_data.get("salas", {}):
-                        pos = jugador_data["salas"][codigo]
-                        x = pos.get("x", 100)
-                        y = pos.get("y", 100)
-                    else:
-                        x = 100
-                        y = 100
+                    pos = jugador_data.get("salas", {}).get(codigo, {})
+                    x = pos.get("x", 100)
+                    y = pos.get("y", 100)
                 else:
                     x = 100
                     y = 100
@@ -365,57 +275,39 @@ async def manejar(ws):
                     "flip": False
                 }
 
-                await ws.send(json.dumps({
-                    "tipo": "unido",
-                    "codigo": codigo
-                }))
-
+                await ws.send(json.dumps({"tipo": "unido", "codigo": codigo}))
                 print("Jugador unido a", codigo)
-
                 await enviar_lista_jugadores(codigo)
 
-
             elif tipo == "listar_salas":
-
-                await ws.send(json.dumps({
-                    "tipo": "salas",
-                    "salas": list(salas.keys())
-                }))
-
+                await ws.send(json.dumps({"tipo": "salas", "salas": list(salas.keys())}))
 
             elif tipo == "listar_jugadores":
-
                 codigo = data.get("codigo", "")
-
                 if codigo in salas:
                     await enviar_lista_jugadores(codigo)
 
             elif tipo == "spawn_npc":
-
+                if ws not in clientes:
+                    continue
                 codigo = clientes[ws]["sala"]
 
                 if codigo not in vacas_por_sala:
                     vacas_por_sala[codigo] = {}
 
                 vaca_id = data.get("id")
-
                 vaca = {
                     "x": data.get("x", 100),
                     "y": data.get("y", 100),
                     "dir_x": random.uniform(-1, 1),
                     "dir_y": random.uniform(-1, 1),
                     "tiempo": random.uniform(1, 3),
-
-                    # 🔥 NECESARIO PARA SEGUIR
                     "siguiendo": None,
                     "tiempo_seguir": 0
                 }
-
                 vacas_por_sala[codigo][vaca_id] = vaca
-
                 print("🐄 Vaca creada:", vaca_id, "en sala", codigo)
 
-                # 🔥 ENVIAR INMEDIATAMENTE
                 await enviar_a_sala(codigo, {
                     "tipo": "npc_movimiento",
                     "id": vaca_id,
@@ -425,219 +317,139 @@ async def manejar(ws):
                 })
 
             elif tipo == "alimentar_vaca":
-
+                if ws not in clientes:
+                    continue
                 codigo = clientes[ws]["sala"]
-                vaca_id = data.get("vaca_id")  # 👈 mismo nombre que el player
-                player_id = clientes[ws]["id"]  # 🔥 EXACTAMENTE EL MISMO ID QUE GUARDA EL SERVER
-
-                print("🐄 Alimentando:", vaca_id, "→ jugador:", player_id)
+                vaca_id = data.get("vaca_id")
+                player_id = clientes[ws]["id"]
 
                 if codigo in vacas_por_sala and vaca_id in vacas_por_sala[codigo]:
-
                     vaca = vacas_por_sala[codigo][vaca_id]
-
-                    # 🔥 ACTIVAR SEGUIMIENTO
                     vaca["siguiendo"] = player_id
-                    vaca["tiempo_seguir"] = 20  # 1 minuto real
-
-                    print("DEBUG siguiendo guardado:", vaca["siguiendo"])
-
-                    print("🐄 Ahora sigue por 60 segundos")
-
+                    vaca["tiempo_seguir"] = 20
+                    print(f"🐄 {vaca_id} ahora sigue a {player_id}")
 
             elif tipo == "chat":
-
                 if ws not in clientes:
                     continue
-
                 codigo = clientes[ws]["sala"]
-
                 nombre = clientes[ws]["nombre"]
-
                 mensaje = str(data.get("mensaje", "")).strip()[:120]
 
-                if mensaje == "":
-                    continue
-
-                print(f"💬 {nombre}: {mensaje}")
-
-                await enviar_a_sala(codigo, {
-                    "tipo": "chat",
-                    "nombre": nombre,
-                    "mensaje": mensaje
-                })
-
+                if mensaje:
+                    print(f"💬 {nombre}: {mensaje}")
+                    await enviar_a_sala(codigo, {
+                        "tipo": "chat",
+                        "nombre": nombre,
+                        "mensaje": mensaje
+                    })
 
             elif tipo == "movimiento":
-
                 if ws not in clientes:
                     continue
-
                 codigo = clientes[ws]["sala"]
                 c = clientes[ws]
 
-                
-                if "x" in data:
-                    c["x"] = data["x"]
-
-                if "y" in data:
-                    c["y"] = data["y"]
-
-                if "nombre" in data:
-                    c["nombre"] = data["nombre"]
-
-                if "progreso" in data:
-                    c["progreso"] = data["progreso"]
-
-                if "nivel" in data:
-                    c["nivel"] = data["nivel"]
-
-                if "flip" in data:
-                    c["flip"] = data["flip"]
+                c["x"] = data.get("x", c["x"])
+                c["y"] = data.get("y", c["y"])
+                c["nombre"] = data.get("nombre", c["nombre"])
+                c["progreso"] = data.get("progreso", c["progreso"])
+                c["nivel"] = data.get("nivel", c["nivel"])
+                c["flip"] = data.get("flip", c["flip"])
 
                 if player_id not in jugadores:
-                    jugadores[player_id] = {
-                        "nombre": c["nombre"],
-                        "salas": {}
-                    }
+                    jugadores[player_id] = {"nombre": c["nombre"], "salas": {}}
 
                 jugadores[player_id]["nombre"] = c["nombre"]
-                jugadores[player_id].setdefault("salas", {})
-
-                jugadores[player_id]["salas"][codigo] = {
+                jugadores[player_id].setdefault("salas", {})[codigo] = {
                     "x": c["x"],
                     "y": c["y"]
                 }
 
-                guardar_jugadores()
-
                 data["nombre"] = c["nombre"]
-
                 await enviar_a_sala(codigo, data)
-                await enviar_lista_jugadores(codigo)
 
             elif tipo == "ataque":
-
                 if ws not in clientes:
                     continue
-
                 codigo = clientes[ws]["sala"]
                 jugador_id = clientes[ws]["id"]
-
-                print("⚔️ Ataque de:", jugador_id)
-
                 await enviar_a_sala(codigo, {
-                "tipo": "ataque",
-                "id": jugador_id,
-                "x": clientes[ws]["x"],
-                "y": clientes[ws]["y"]
-            })
+                    "tipo": "ataque",
+                    "id": jugador_id,
+                    "x": clientes[ws]["x"],
+                    "y": clientes[ws]["y"]
+                })
 
-            
             elif tipo == "portal":
-
                 if ws not in clientes:
                     continue
-
                 codigo = clientes[ws]["sala"]
-
                 portal_id = int(data.get("portal", 0))
                 visible = bool(data.get("visible", False))
-
-                print(
-                    "🌀 Portal cambiado:",
-                    portal_id,
-                    "visible:",
-                    visible,
-                    "sala:",
-                    codigo
-                )
-
-                # 🔥 ENVIAR EL CAMBIO A TODOS LOS JUGADORES
                 await enviar_a_sala(codigo, {
                     "tipo": "portal",
                     "portal": portal_id,
                     "visible": visible
-                })        
+                })
 
-            
             elif tipo == "muerte":
-
                 if ws not in clientes:
                     continue
-
                 codigo = clientes[ws]["sala"]
                 jugador_id = clientes[ws]["id"]
-
-                print("💀 Muerte de:", jugador_id)
-
                 await enviar_a_sala(codigo, {
                     "tipo": "muerte",
                     "id": jugador_id
                 })
 
-
-
     except Exception as e:
-        print("Cliente desconectado:", e)
+        print("Error en conexión:", e)
 
     finally:
-
         if ws in clientes:
-
             codigo = clientes[ws]["sala"]
             jugador_id = clientes[ws].get("id")
 
             if codigo in salas:
-
                 if ws in salas[codigo]:
                     salas[codigo].remove(ws)
 
-                await enviar_a_sala(codigo, {
-                    "tipo": "jugador_salio",
-                    "id": jugador_id
-                })
-
-                await enviar_lista_jugadores(codigo)
-
-                # eliminar sala vacía
-                #if len(salas[codigo]) == 0:
-                    #del salas[codigo]
-                    #print("Sala eliminada:", codigo)
+                if len(salas[codigo]) == 0:
+                    del salas[codigo]
+                    if codigo in vacas_por_sala:
+                        del vacas_por_sala[codigo]
+                    guardar_salas()
+                else:
+                    await enviar_a_sala(codigo, {
+                        "tipo": "jugador_salio",
+                        "id": jugador_id
+                    })
+                    await enviar_lista_jugadores(codigo)
 
             del clientes[ws]
 
-            guardar_salas()
-            guardar_jugadores()
-
 
 async def responder_http(path, request_headers):
-
-    
     upgrade = request_headers.get("Upgrade", "").lower()
-
     if upgrade == "websocket":
         return None
 
     body = b"Servidor online"
-
     return (
         200,
-        [
-            ("Content-Type", "text/plain"),
-            ("Content-Length", str(len(body)))
-        ],
+        [("Content-Type", "text/plain"), ("Content-Length", str(len(body)))],
         body
     )
 
-async def main():
 
+async def main():
     cargar_salas()
     cargar_jugadores()
-
     print("Servidor iniciado en puerto", PORT)
 
-    asyncio.create_task(loop_vacas())  #  IMPORTANTE
+    asyncio.create_task(loop_vacas())
+    asyncio.create_task(loop_guardado_autoclean())
 
     async with websockets.serve(
         manejar,
@@ -647,5 +459,5 @@ async def main():
     ):
         await asyncio.Future()
 
-
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
