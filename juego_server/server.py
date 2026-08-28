@@ -311,11 +311,11 @@ async def manejar(ws):
                     continue
 
 
-                if tipo == "crear_sala":
+            if tipo == "crear_sala":
     
-                    codigo = generar_codigo()
+                 codigo = generar_codigo()
                 
-                    nombre_sala = str(
+                 nombre_sala = str(
                         data.get("nombre_sala", "")
                     ).strip()
                 
