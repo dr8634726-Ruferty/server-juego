@@ -19,7 +19,7 @@ jugadores = {}
 
 
 ultimo_guardado = 0
-INTERVALO_GUARDADO = 5  
+INTERVALO_GUARDADO = 5
 
 
 
@@ -225,9 +225,19 @@ async def enviar_lista_jugadores(codigo):
 
     lista = []
 
+    # 🔥 NUEVO: hora actual del servidor
+    ahora = time.time()
+
     for ws in salas[codigo]:
         if ws in clientes:
             c = clientes[ws]
+
+            # 🔥 NUEVO: calcular tiempo conectado
+            hora_conexion = c.get("hora_conexion", ahora)
+
+            tiempo_conectado = int(
+                ahora - hora_conexion
+            )
 
             lista.append({
                 "id": c["id"],
@@ -236,7 +246,10 @@ async def enviar_lista_jugadores(codigo):
                 "y": c.get("y", 0),
                 "progreso": c.get("progreso", 0),
                 "nivel": c.get("nivel", 0),
-                "flip": c.get("flip", False)
+                "flip": c.get("flip", False),
+
+                # 🔥 NUEVO
+                "tiempo_conectado": tiempo_conectado
             })
 
     await enviar_a_sala(codigo, {
@@ -275,7 +288,6 @@ async def manejar(ws):
                 else:
                     continue
 
-
             if tipo == "crear_sala":
 
                 codigo = generar_codigo()
@@ -306,7 +318,11 @@ async def manejar(ws):
                     "y": y,
                     "progreso": 0,
                     "nivel": 0,
-                    "flip": False
+                    "flip": False,
+
+                    # 🔥 NUEVO
+                    # Guarda el momento exacto en que entra
+                    "hora_conexion": time.time()
                 }
 
                 guardar_salas()
@@ -319,6 +335,7 @@ async def manejar(ws):
                 print("Sala creada:", codigo)
 
                 await enviar_lista_jugadores(codigo)
+
 
 
             elif tipo == "unirse_sala":
@@ -362,7 +379,11 @@ async def manejar(ws):
                     "y": y,
                     "progreso": 0,
                     "nivel": 0,
-                    "flip": False
+                    "flip": False,
+
+                    # 🔥 NUEVO
+                    # Cada nueva conexión empieza su propio contador
+                    "hora_conexion": time.time()
                 }
 
                 await ws.send(json.dumps({
@@ -375,6 +396,7 @@ async def manejar(ws):
                 await enviar_lista_jugadores(codigo)
 
 
+
             elif tipo == "listar_salas":
 
                 await ws.send(json.dumps({
@@ -383,12 +405,15 @@ async def manejar(ws):
                 }))
 
 
+
             elif tipo == "listar_jugadores":
 
                 codigo = data.get("codigo", "")
 
                 if codigo in salas:
                     await enviar_lista_jugadores(codigo)
+
+
 
             elif tipo == "spawn_npc":
 
@@ -413,7 +438,12 @@ async def manejar(ws):
 
                 vacas_por_sala[codigo][vaca_id] = vaca
 
-                print("🐄 Vaca creada:", vaca_id, "en sala", codigo)
+                print(
+                    "🐄 Vaca creada:",
+                    vaca_id,
+                    "en sala",
+                    codigo
+                )
 
                 # 🔥 ENVIAR INMEDIATAMENTE
                 await enviar_a_sala(codigo, {
@@ -424,13 +454,22 @@ async def manejar(ws):
                     "flip": False
                 })
 
+
+
             elif tipo == "alimentar_vaca":
 
                 codigo = clientes[ws]["sala"]
-                vaca_id = data.get("vaca_id")  # 👈 mismo nombre que el player
-                player_id = clientes[ws]["id"]  # 🔥 EXACTAMENTE EL MISMO ID QUE GUARDA EL SERVER
+                vaca_id = data.get("vaca_id")
 
-                print("🐄 Alimentando:", vaca_id, "→ jugador:", player_id)
+                # 🔥 EXACTAMENTE EL MISMO ID QUE GUARDA EL SERVER
+                player_id = clientes[ws]["id"]
+
+                print(
+                    "🐄 Alimentando:",
+                    vaca_id,
+                    "→ jugador:",
+                    player_id
+                )
 
                 if codigo in vacas_por_sala and vaca_id in vacas_por_sala[codigo]:
 
@@ -438,11 +477,15 @@ async def manejar(ws):
 
                     # 🔥 ACTIVAR SEGUIMIENTO
                     vaca["siguiendo"] = player_id
-                    vaca["tiempo_seguir"] = 20  # 1 minuto real
+                    vaca["tiempo_seguir"] = 20
 
-                    print("DEBUG siguiendo guardado:", vaca["siguiendo"])
+                    print(
+                        "DEBUG siguiendo guardado:",
+                        vaca["siguiendo"]
+                    )
 
                     print("🐄 Ahora sigue por 60 segundos")
+
 
 
             elif tipo == "chat":
@@ -454,20 +497,22 @@ async def manejar(ws):
 
                 nombre = clientes[ws]["nombre"]
 
-                mensaje = str(data.get("mensaje", "")).strip()[:120]
+                mensaje = str(
+                    data.get("mensaje", "")
+                ).strip()[:120]
 
                 if mensaje == "":
                     continue
 
-                print(f"💬 {nombre}: {mensaje}")
+                print(
+                    f"💬 {nombre}: {mensaje}"
+                )
 
                 await enviar_a_sala(codigo, {
                     "tipo": "chat",
                     "nombre": nombre,
                     "mensaje": mensaje
                 })
-
-
             elif tipo == "movimiento":
 
                 if ws not in clientes:
@@ -516,6 +561,7 @@ async def manejar(ws):
                 await enviar_a_sala(codigo, data)
                 await enviar_lista_jugadores(codigo)
 
+
             elif tipo == "ataque":
 
                 if ws not in clientes:
@@ -527,13 +573,13 @@ async def manejar(ws):
                 print("⚔️ Ataque de:", jugador_id)
 
                 await enviar_a_sala(codigo, {
-                "tipo": "ataque",
-                "id": jugador_id,
-                "x": clientes[ws]["x"],
-                "y": clientes[ws]["y"]
-            })
+                    "tipo": "ataque",
+                    "id": jugador_id,
+                    "x": clientes[ws]["x"],
+                    "y": clientes[ws]["y"]
+                })
 
-            
+
             elif tipo == "portal":
 
                 if ws not in clientes:
@@ -558,9 +604,9 @@ async def manejar(ws):
                     "tipo": "portal",
                     "portal": portal_id,
                     "visible": visible
-                })        
+                })
 
-            
+
             elif tipo == "muerte":
 
                 if ws not in clientes:
@@ -577,9 +623,10 @@ async def manejar(ws):
                 })
 
 
-
     except Exception as e:
+
         print("Cliente desconectado:", e)
+
 
     finally:
 
@@ -630,6 +677,7 @@ async def responder_http(path, request_headers):
         body
     )
 
+
 async def main():
 
     cargar_salas()
@@ -637,7 +685,7 @@ async def main():
 
     print("Servidor iniciado en puerto", PORT)
 
-    asyncio.create_task(loop_vacas())  #  IMPORTANTE
+    asyncio.create_task(loop_vacas())  # IMPORTANTE
 
     async with websockets.serve(
         manejar,
