@@ -622,6 +622,30 @@ async def manejar(ws):
                     "id": jugador_id
                 })
 
+            
+            elif tipo == "mensaje_global":
+
+                if ws not in clientes:
+                    continue
+
+                codigo = clientes[ws]["sala"]
+
+                mensaje = str(
+                    data.get("mensaje", "")
+                ).strip()[:200]
+
+                if mensaje == "":
+                    continue
+
+                print(
+                    f"📢 Mensaje global en {codigo}: {mensaje}"
+                )
+
+                await enviar_a_sala(codigo, {
+                    "tipo": "mensaje_global",
+                    "mensaje": mensaje
+                })
+
 
     except Exception as e:
 
